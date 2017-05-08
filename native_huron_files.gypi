@@ -9,6 +9,8 @@
       'native_huron/persistent_dictionary.cc',
       'native_huron/persistent_dictionary.h',
       'native_huron/emitter.h',
+      'native_huron/uv_callback.h',
+      'native_huron/uv_callback.c'
     ],
   },
 }

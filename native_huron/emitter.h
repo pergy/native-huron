@@ -9,6 +9,7 @@
 
 #include <native_huron/converter.h>
 #include <native_huron/dictionary.h>
+#include <native_huron/uv_callback.h>
 
 namespace huron {
 
@@ -20,8 +21,18 @@ typedef Nan::CopyablePersistentTraits<v8::Function>::CopyablePersistent
 
 class Emitter : public Nan::ObjectWrap {
  public:
-  Emitter() {}
-  ~Emitter() {}
+  Emitter () {
+    uv_callback_init(
+      uv_default_loop(),
+      &AsyncDataCallback,
+      [](uv_callback_t* h, void* d) -> void* {
+        Emitter::AsyncEmit(h, d);
+        return NULL;
+      },
+      UV_DEFAULT
+      );
+  }
+  ~Emitter () {}
 
   struct AsyncData {
     Emitter* self;
@@ -29,10 +40,10 @@ class Emitter : public Nan::ObjectWrap {
     std::function<void(huron::Dictionary&)> handler;
   };
 
-  static void uv_free_handle(uv_handle_t* handle) {}
+  uv_callback_t AsyncDataCallback;
 
-  template <typename... Args>
-  void Emit(v8::Local<v8::Value> eventName, const Args&... args) {
+  template<typename... Args>
+  void Emit (v8::Local<v8::Value> eventName, const Args&... args) {
     v8::String::Utf8Value name_(eventName->ToString());
     std::string name = std::string(*name_);
 
@@ -75,16 +86,12 @@ class Emitter : public Nan::ObjectWrap {
 
   template <typename Func>
   void Emit(std::string eventName, Func fn) {
-    uv_async_t* async = new uv_async_t();
-    uv_async_init(uv_default_loop(), async, Emitter::AsyncEmit);
-
     AsyncData* data = new AsyncData();
     data->self = this;
     data->event_name = eventName;
     data->handler = fn;
 
-    async->data = (void*)data;
-    uv_async_send(async);
+    uv_callback_fire(&AsyncDataCallback, static_cast<void*>(data), NULL);
   }
 
   template <typename Func>
@@ -92,19 +99,19 @@ class Emitter : public Nan::ObjectWrap {
     Emit(std::string(eventName), fn);
   }
 
-  static void AsyncEmit(uv_async_t* handle) {
+  static void AsyncEmit(uv_callback_t *callback, void *data) {
     Nan::HandleScope scope;
 
-    AsyncData data = *((AsyncData*)handle->data);
+    AsyncData* async_data = static_cast<AsyncData*>(data);
 
     v8::Isolate* iso = v8::Isolate::GetCurrent();
     huron::Dictionary dict = huron::Dictionary::CreateEmpty(iso);
-    data.handler(dict);
+    async_data->handler(dict);
 
-    data.self->Emit(Nan::New(data.event_name).ToLocalChecked(),
-                    huron::ConvertToV8(iso, dict));
+    async_data->self->Emit(Nan::New(async_data->event_name).ToLocalChecked()
+      , huron::ConvertToV8(iso, dict));
 
-    uv_close((uv_handle_t*)handle, &Emitter::uv_free_handle);
+    free(async_data);
   }
 
   static void Off(const Nan::FunctionCallbackInfo<v8::Value>& info) {
