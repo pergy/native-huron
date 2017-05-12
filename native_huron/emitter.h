@@ -24,7 +24,7 @@ class Emitter : public Nan::ObjectWrap {
   Emitter () {
     uv_callback_init(
       uv_default_loop(),
-      &AsyncDataCallback,
+      &async_cb,
       [](uv_callback_t* h, void* d) -> void* {
         Emitter::AsyncEmit(h, d);
         return NULL;
@@ -38,9 +38,12 @@ class Emitter : public Nan::ObjectWrap {
     Emitter* self;
     std::string event_name;
     std::function<void(huron::Dictionary&)> handler;
-  };
 
-  uv_callback_t AsyncDataCallback;
+    AsyncData(Emitter *self, const std::string& event_name,
+      const std::function<void(huron::Dictionary&)>& handler)
+      : self(self), event_name(event_name), handler(handler)
+    {}
+  };
 
   template<typename... Args>
   void Emit (v8::Local<v8::Value> eventName, const Args&... args) {
@@ -84,14 +87,12 @@ class Emitter : public Nan::ObjectWrap {
     Emit(Nan::New(eventName).ToLocalChecked(), args...);
   }
 
-  template <typename Func>
-  void Emit(std::string eventName, Func fn) {
-    AsyncData* data = new AsyncData();
-    data->self = this;
-    data->event_name = eventName;
-    data->handler = fn;
-
-    uv_callback_fire(&AsyncDataCallback, static_cast<void*>(data), NULL);
+  template<typename Func>
+  void Emit (std::string eventName, Func fn) {
+    uv_callback_fire(
+      &async_cb,
+      static_cast<void*>(new AsyncData(this, eventName, fn)),
+      NULL);
   }
 
   template <typename Func>
@@ -111,7 +112,7 @@ class Emitter : public Nan::ObjectWrap {
     async_data->self->Emit(Nan::New(async_data->event_name).ToLocalChecked()
       , huron::ConvertToV8(iso, dict));
 
-    free(async_data);
+    delete async_data;
   }
 
   static void Off(const Nan::FunctionCallbackInfo<v8::Value>& info) {
@@ -297,6 +298,7 @@ class Emitter : public Nan::ObjectWrap {
  private:
   std::map<std::string, std::vector<internal::CopyablePersistentType> > m;
   std::map<std::string, std::vector<internal::CopyablePersistentType> > o;
+  uv_callback_t async_cb;
 };
 
 }  // namespace huron
