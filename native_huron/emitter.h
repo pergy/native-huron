@@ -21,32 +21,28 @@ typedef Nan::CopyablePersistentTraits<v8::Function>::CopyablePersistent
 
 class Emitter : public Nan::ObjectWrap {
  public:
-  Emitter () {
-    uv_callback_init(
-      uv_default_loop(),
-      &async_cb,
-      [](uv_callback_t* h, void* d) -> void* {
-        Emitter::AsyncEmit(h, d);
-        return NULL;
-      },
-      UV_DEFAULT
-      );
+  Emitter() {
+    uv_callback_init(uv_default_loop(), &async_cb,
+                     [](uv_callback_t* h, void* d) -> void* {
+                       Emitter::AsyncEmit(h, d);
+                       return NULL;
+                     },
+                     UV_DEFAULT);
   }
-  ~Emitter () {}
+  ~Emitter() {}
 
   struct AsyncData {
     Emitter* self;
     std::string event_name;
     std::function<void(huron::Dictionary&)> handler;
 
-    AsyncData(Emitter *self, const std::string& event_name,
-      const std::function<void(huron::Dictionary&)>& handler)
-      : self(self), event_name(event_name), handler(handler)
-    {}
+    AsyncData(Emitter* self, const std::string& event_name,
+              const std::function<void(huron::Dictionary&)>& handler)
+        : self(self), event_name(event_name), handler(handler) {}
   };
 
-  template<typename... Args>
-  void Emit (v8::Local<v8::Value> eventName, const Args&... args) {
+  template <typename... Args>
+  void Emit(v8::Local<v8::Value> eventName, const Args&... args) {
     v8::String::Utf8Value name_(eventName->ToString());
     std::string name = std::string(*name_);
 
@@ -87,12 +83,11 @@ class Emitter : public Nan::ObjectWrap {
     Emit(Nan::New(eventName).ToLocalChecked(), args...);
   }
 
-  template<typename Func>
-  void Emit (std::string eventName, Func fn) {
-    uv_callback_fire(
-      &async_cb,
-      static_cast<void*>(new AsyncData(this, eventName, fn)),
-      NULL);
+  template <typename Func>
+  void Emit(std::string eventName, Func fn) {
+    uv_callback_fire(&async_cb,
+                     static_cast<void*>(new AsyncData(this, eventName, fn)),
+                     NULL);
   }
 
   template <typename Func>
@@ -100,7 +95,7 @@ class Emitter : public Nan::ObjectWrap {
     Emit(std::string(eventName), fn);
   }
 
-  static void AsyncEmit(uv_callback_t *callback, void *data) {
+  static void AsyncEmit(uv_callback_t* callback, void* data) {
     Nan::HandleScope scope;
 
     AsyncData* async_data = static_cast<AsyncData*>(data);
@@ -109,15 +104,14 @@ class Emitter : public Nan::ObjectWrap {
     huron::Dictionary dict = huron::Dictionary::CreateEmpty(iso);
     async_data->handler(dict);
 
-    async_data->self->Emit(Nan::New(async_data->event_name).ToLocalChecked()
-      , huron::ConvertToV8(iso, dict));
+    async_data->self->Emit(Nan::New(async_data->event_name).ToLocalChecked(),
+                           huron::ConvertToV8(iso, dict));
 
     delete async_data;
   }
 
   static void Off(const Nan::FunctionCallbackInfo<v8::Value>& info) {
-    if (!info[0]->IsString() || !info[1]->IsFunction())
-      return;
+    if (!info[0]->IsString() || !info[1]->IsFunction()) return;
 
     Emitter* emitter = ObjectWrap::Unwrap<Emitter>(info.Holder());
 
@@ -187,8 +181,7 @@ class Emitter : public Nan::ObjectWrap {
   }
 
   static void On(const Nan::FunctionCallbackInfo<v8::Value>& info) {
-    if (!info[0]->IsString() || !info[1]->IsFunction())
-      return;
+    if (!info[0]->IsString() || !info[1]->IsFunction()) return;
 
     Emitter* emitter = ObjectWrap::Unwrap<Emitter>(info.Holder());
 
@@ -220,8 +213,7 @@ class Emitter : public Nan::ObjectWrap {
   }
 
   static void Once(const Nan::FunctionCallbackInfo<v8::Value>& info) {
-    if (!info[0]->IsString() || !info[1]->IsFunction())
-      return;
+    if (!info[0]->IsString() || !info[1]->IsFunction()) return;
 
     Emitter* emitter = ObjectWrap::Unwrap<Emitter>(info.Holder());
 
@@ -268,8 +260,7 @@ class Emitter : public Nan::ObjectWrap {
   }
 
   static void ListenerCount(const Nan::FunctionCallbackInfo<v8::Value>& info) {
-    if (!info[0]->IsString())
-      return;
+    if (!info[0]->IsString()) return;
     Emitter* emitter = ObjectWrap::Unwrap<Emitter>(info.Holder());
     size_t counter = 0;
     v8::String::Utf8Value name(info[0]->ToString());
